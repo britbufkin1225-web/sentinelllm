@@ -127,6 +127,96 @@ def cache_set(key, data):
         "data": data
     }
 
+def get_cheatsheet(query):
+    query = query.strip().lower()
+
+    if not query:
+        return None, False
+
+    cache_key = f"cheatsheet:{query}"
+    cached_result, cache_hit = cache_get(cache_key)
+
+    if cache_hit:
+        return cached_result, True
+
+    filename = f"{query}.txt"
+    filepath = os.path.join(CHEATSHEET_DIR, filename)
+
+    if not os.path.exists(filepath):
+        return None, False
+
+    with open(filepath, "r", encoding="utf-8") as file:
+        result = file.read()
+
+    cache_set(cache_key, result)
+
+    return result, False
+
+
+def search_cheatsheets(query):
+    query = query.strip().lower()
+
+    cache_key = f"cheatsheet_search:{query}"
+    cached_result, cache_hit = cache_get(cache_key)
+
+    if cache_hit:
+        return cached_result, True
+
+    results = []
+
+    if not os.path.exists(CHEATSHEET_DIR):
+        return results, False
+
+    for filename in os.listdir(CHEATSHEET_DIR):
+        if not filename.endswith(".txt"):
+            continue
+
+        filepath = os.path.join(CHEATSHEET_DIR, filename)
+
+        with open(filepath, "r", encoding="utf-8") as file:
+            content = file.read()
+
+        name = filename.replace(".txt", "")
+
+        if query in name.lower() or query in content.lower():
+            results.append({
+                "name": name,
+                "filename": filename,
+                "preview": content[:200]
+            })
+
+    cache_set(cache_key, results)
+
+    return results, False
+
+
+def autocomplete_cheatsheets(query):
+    query = query.strip().lower()
+
+    cache_key = f"cheatsheet_autocomplete:{query}"
+    cached_result, cache_hit = cache_get(cache_key)
+
+    if cache_hit:
+        return cached_result, True
+
+    suggestions = []
+
+    if not os.path.exists(CHEATSHEET_DIR):
+        return suggestions, False
+
+    for filename in os.listdir(CHEATSHEET_DIR):
+        if not filename.endswith(".txt"):
+            continue
+
+        name = filename.replace(".txt", "")
+
+        if name.lower().startswith(query):
+            suggestions.append(name)
+
+    cache_set(cache_key, suggestions)
+
+    return suggestions, False
+
 # =========================
 # Request Handler
 # =========================
