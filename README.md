@@ -1,36 +1,32 @@
-\# SentinelLLM
+# SentinelLLM Backend
 
+SentinelLLM is a local backend service for experimenting with AI assistant infrastructure, cybersecurity cheatsheets, request tracing, API security, caching, and backend observability.
 
+## Current Features
 
-A local-first AI assistant focused on security, observability, and intelligent model routing.
+- Local HTTP backend server
+- Health check endpoint
+- Chat endpoint
+- API key authentication
+- Per-IP rate limiting
+- JSON request logging
+- Request ID tracing
+- Latency tracking
+- Local cybersecurity cheatsheet lookup
+- Cheatsheet search
+- Cheatsheet autocomplete
+- In-memory response caching
 
+## Planned Features
 
-
-\## Features (Planned)
-
-\- Token-aware context management
-
-\- Model routing (fast vs deep)
-
-\- Chat history tracking
-
-\- Security-focused logging and auditing
-
-
-
-\## Structure
-
-\- backend/ → core logic
-
-\- frontend/ → UI (planned)
-
-\- datasets/ → embeddings / data
-
-\- docs/ → documentation
-
-
-
-\## Setup
-
-Coming soon.
+- Cache hit/miss visibility
+- Cache stats endpoint
+- Cache clearing endpoint
+- SQLite-backed cheatsheet storage
+- Better structured error responses
+- Unit tests
+- Docker support
+- FastAPI migration
+- Admin dashboard
+- Cybersecurity threat-intel endpoints
 
