@@ -1,29 +1,36 @@
-import os
-from dotenv import load_dotenv
-load_dotenv()
-
-API_KEY = os.getenv("SENTINEL_API_KEY")
-
-if not API_KEY:
-    raise ValueError("Missing SENTINEL_API_KEY in .env file")
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from collections import defaultdict
 import json
 import os
 import time
 import logging
 import uuid
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse, parse_qs
 
 # =========================
-# Request Logging Setup
+# Configuration
 # =========================
+
+HOST = "localhost"
+PORT = 8000
 
 LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
-
 REQUEST_LOG_FILE = os.path.join(LOG_DIR, "requests.log")
+
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 10
+
+API_KEY = os.getenv("API_KEY", "dev-key-change-me")
+
+CHEATSHEET_DIR = "cheatsheets"
+CACHE_TTL_SECONDS = 300
+
+
+# =========================
+# Setup
+# =========================
+
+os.makedirs(LOG_DIR, exist_ok=True)
 
 request_logger = logging.getLogger("request_logger")
 request_logger.setLevel(logging.INFO)
@@ -34,174 +41,388 @@ if not request_logger.handlers:
     request_logger.addHandler(file_handler)
 
 
+rate_limit_store = {}
+cheatsheet_cache = {}
+
+
 # =========================
-# Rate Limiting Setup
+# Helpers
 # =========================
 
-RATE_LIMIT = 10
-RATE_WINDOW = 60  # seconds
-
-ip_request_times = defaultdict(list)
+def now_iso():
+    return datetime.now().isoformat()
 
 
-def is_rate_limited(ip):
-    now = time.time()
-
-    ip_request_times[ip] = [
-        t for t in ip_request_times[ip]
-        if now - t < RATE_WINDOW
-    ]
-
-    if len(ip_request_times[ip]) >= RATE_LIMIT:
-        return True
-
-    ip_request_times[ip].append(now)
-    return False
-
-
-def log_chat_request(request_id, ip, endpoint, model, prompt, response_text, status, latency):
+def log_event(ctx, status, message, model=None, prompt=None, response_text=None, error=None):
     log_entry = {
-        "request_id": request_id,
-        "timestamp": datetime.now().isoformat(),
-        "ip": ip,
-        "endpoint": endpoint,
+        "timestamp": now_iso(),
+        "request_id": ctx.request_id,
+        "ip": ctx.ip,
+        "method": ctx.method,
+        "endpoint": ctx.endpoint,
+        "status": status,
+        "latency_ms": ctx.latency_ms(),
         "model": model,
         "prompt_length": len(prompt) if prompt else 0,
         "response_length": len(response_text) if response_text else 0,
-        "status": status,
-        "latency_ms": round(latency * 1000, 2)
+        "error": str(error) if error else None,
+        "message": message
     }
 
     request_logger.info(json.dumps(log_entry))
 
-def is_authorized(headers):
-    provided_key = headers.get("X-API-Key")
-    return provided_key == API_KEY
 
-class Handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        if not is_authorized(self.headers):
-            self.send_response(401)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "error": "Unauthorized"
-            }).encode("utf-8"))
-            return
-        start_time = time.time()
-        request_id = str(uuid.uuid4())
-        client_ip = self.client_address[0]
+def is_rate_limited(ip):
+    current_time = time.time()
 
-        if is_rate_limited(client_ip):
-            self.send_response(429)
-            self.send_header("Content-Type", "application/json")
+    if ip not in rate_limit_store:
+        rate_limit_store[ip] = []
+
+    rate_limit_store[ip] = [
+        timestamp for timestamp in rate_limit_store[ip]
+        if current_time - timestamp < RATE_LIMIT_WINDOW_SECONDS
+    ]
+
+    if len(rate_limit_store[ip]) >= RATE_LIMIT_MAX_REQUESTS:
+        return True
+
+    rate_limit_store[ip].append(current_time)
+    return False
+
+
+def fake_ai_response(prompt):
+    return f"Received your prompt: {prompt}"
+
+
+class RequestContext:
+    def __init__(self, request_id, ip, endpoint, method):
+        self.request_id = request_id
+        self.ip = ip
+        self.endpoint = endpoint
+        self.method = method
+        self.start_time = time.time()
+
+    def latency_ms(self):
+        return round((time.time() - self.start_time) * 1000, 2)
+
+
+def cache_get(key):
+    cached_item = cheatsheet_cache.get(key)
+
+    if not cached_item:
+        return None, False
+
+    age = time.time() - cached_item["created_at"]
+
+    if age > CACHE_TTL_SECONDS:
+        del cheatsheet_cache[key]
+        return None, False
+
+    return cached_item["data"], True
+
+
+def cache_set(key, data):
+    cheatsheet_cache[key] = {
+        "created_at": time.time(),
+        "data": data
+    }
+
+
+def get_cheatsheet(query):
+    query = query.strip().lower()
+
+    if not query:
+        return None, False
+
+    cache_key = f"cheatsheet:{query}"
+    cached_result, cache_hit = cache_get(cache_key)
+
+    if cache_hit:
+        return cached_result, True
+
+    filename = f"{query}.txt"
+    filepath = os.path.join(CHEATSHEET_DIR, filename)
+
+    if not os.path.exists(filepath):
+        return None, False
+
+    with open(filepath, "r", encoding="utf-8") as file:
+        result = file.read()
+
+    cache_set(cache_key, result)
+
+    return result, False
+
+
+def search_cheatsheets(query):
+    query = query.strip().lower()
+
+    cache_key = f"cheatsheet_search:{query}"
+    cached_result, cache_hit = cache_get(cache_key)
+
+    if cache_hit:
+        return cached_result, True
+
+    results = []
+
+    if not os.path.exists(CHEATSHEET_DIR):
+        return results, False
+
+    for filename in os.listdir(CHEATSHEET_DIR):
+        if not filename.endswith(".txt"):
+            continue
+
+        filepath = os.path.join(CHEATSHEET_DIR, filename)
+
+        with open(filepath, "r", encoding="utf-8") as file:
+            content = file.read()
+
+        name = filename.replace(".txt", "")
+
+        if query in name.lower() or query in content.lower():
+            results.append({
+                "name": name,
+                "filename": filename,
+                "preview": content[:200]
+            })
+
+    cache_set(cache_key, results)
+
+    return results, False
+
+
+def autocomplete_cheatsheets(query):
+    query = query.strip().lower()
+
+    cache_key = f"cheatsheet_autocomplete:{query}"
+    cached_result, cache_hit = cache_get(cache_key)
+
+    if cache_hit:
+        return cached_result, True
+
+    suggestions = []
+
+    if not os.path.exists(CHEATSHEET_DIR):
+        return suggestions, False
+
+    for filename in os.listdir(CHEATSHEET_DIR):
+        if not filename.endswith(".txt"):
+            continue
+
+        name = filename.replace(".txt", "")
+
+        if name.lower().startswith(query):
+            suggestions.append(name)
+
+    cache_set(cache_key, suggestions)
+
+    return suggestions, False
+
+
+# =========================
+# Request Handler
+# =========================
+
+class ChatHandler(BaseHTTPRequestHandler):
+
+    def set_headers(self, status_code=200, request_id=None):
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+
+        if request_id:
             self.send_header("X-Request-ID", request_id)
-            self.end_headers()
 
-            response = {
-                "error": "Rate limit exceeded",
-                "message": "Too many requests. Please wait and try again.",
-                "request_id": request_id
-            }
+        self.end_headers()
 
-            self.wfile.write(json.dumps(response).encode("utf-8"))
+    def send_json(self, status_code, data, request_id):
+        data["request_id"] = request_id
 
-            latency = time.time() - start_time
+        self.set_headers(status_code, request_id)
 
-            log_chat_request(
-                request_id=request_id,
-                ip=client_ip,
-                endpoint=self.path,
-                model="unknown",
-                prompt="",
-                response_text="Rate limit exceeded",
-                status="rate_limited",
-                latency=latency
-            )
+        response_body = json.dumps(data).encode("utf-8")
+        self.wfile.write(response_body)
 
+    def do_OPTIONS(self):
+        request_id = str(uuid.uuid4())
+        self.set_headers(200, request_id)
+
+    def do_GET(self):
+        request_id = str(uuid.uuid4())
+
+        parsed_path = urlparse(self.path)
+        endpoint = parsed_path.path
+        query_params = parse_qs(parsed_path.query)
+        ip = self.client_address[0]
+
+        ctx = RequestContext(request_id, ip, endpoint, "GET")
+
+        if endpoint == "/health":
+            log_event(ctx, 200, "Health check")
+
+            self.send_json(200, {
+               "status": "ok",
+               "service": "SentinelLLM backend"
+            }, request_id)
             return
+
+        if endpoint == "/cheatsheet":
+            search_query = query_params.get("q", [""])[0]
+            result, cache_hit = get_cheatsheet(search_query)
+
+            if result is None:
+                log_event(ctx, 404, f"Cheatsheet not found: {search_query}")
+
+                self.send_json(404, {
+                    "query": search_query,
+                    "error": "Cheatsheet not found"
+                }, request_id)
+                return
+
+            log_event(ctx, 200, f"Cheatsheet served: {search_query}")
+
+            self.send_json(200, {
+                "query": search_query,
+                "result": result,
+                "source": "local_file",
+                "cache_hit": cache_hit
+            }, request_id)
+            return
+
+        if endpoint == "/cheatsheet/search":
+            search_query = query_params.get("q", [""])[0]
+            results, cache_hit = search_cheatsheets(search_query)
+
+            log_event(ctx, 200, f"Cheatsheet search: {search_query}")
+
+            self.send_json(200, {
+                "query": search_query,
+                "count": len(results),
+                "results": results,
+                "cache_hit": cache_hit
+            }, request_id)
+            return
+
+        if endpoint == "/cheatsheet/autocomplete":
+            q = query_params.get("q", [""])[0]
+            suggestions, cache_hit = autocomplete_cheatsheets(q)
+
+            log_event(ctx, 200, "Cheatsheet autocomplete")
+
+            self.send_json(200, {
+                "query": q,
+                "suggestions": suggestions,
+                "cache_hit": cache_hit
+            }, request_id)
+            return
+
+        log_event(ctx, 404, "Endpoint not found")
+
+        self.send_json(404, {
+            "error": "Endpoint not found"
+        }, request_id)
+
+    def do_POST(self):
+        request_id = str(uuid.uuid4())
+
+        parsed_path = urlparse(self.path)
+        endpoint = parsed_path.path
+        ip = self.client_address[0]
+
+        ctx = RequestContext(request_id, ip, endpoint, "POST")
 
         try:
-            if self.path == "/chat":
-                content_length = int(self.headers["Content-Length"])
-                body = self.rfile.read(content_length)
+            if endpoint != "/chat":
+                log_event(ctx, 404, "Endpoint not found")
+
+                self.send_json(404, {
+                    "error": "Endpoint not found"
+                }, request_id)
+                return
+
+            if is_rate_limited(ip):
+                log_event(ctx, 429, "Rate limit exceeded")
+
+                self.send_json(429, {
+                    "error": "Rate limit exceeded"
+                }, request_id)
+                return
+
+            incoming_api_key = self.headers.get("X-API-Key")
+
+            if incoming_api_key != API_KEY:
+                log_event(ctx, 401, "Invalid or missing API key")
+
+                self.send_json(401, {
+                    "error": "Invalid or missing API key"
+                }, request_id)
+                return
+
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+
+            try:
                 data = json.loads(body)
+            except json.JSONDecodeError:
+                log_event(ctx, 400, "Invalid JSON")
 
-                user_input = data.get("message", "")
+                self.send_json(400, {
+                    "error": "Invalid JSON"
+                }, request_id)
+                return
 
-                model = "local-echo-model"
+            prompt = data.get("prompt", "").strip()
 
-                response = {
-                    "reply": f"Echo: {user_input}",
-                    "request_id": request_id
-                }
+            if not prompt:
+                log_event(ctx, 400, "Missing prompt")
 
-                response_text = response["reply"]
+                self.send_json(400, {
+                    "error": "Missing prompt"
+                }, request_id)
+                return
 
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("X-Request-ID", request_id)
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode("utf-8"))
+            response_text = fake_ai_response(prompt)
 
-                latency = time.time() - start_time
-
-                log_chat_request(
-                    request_id=request_id,
-                    ip=client_ip,
-                    endpoint="/chat",
-                    model=model,
-                    prompt=user_input,
-                    response_text=response_text,
-                    status="success",
-                    latency=latency
-                )
-
-            else:
-                self.send_response(404)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("X-Request-ID", request_id)
-                self.end_headers()
-
-                response = {
-                    "error": "Not found",
-                    "request_id": request_id
-                }
-
-                self.wfile.write(json.dumps(response).encode("utf-8"))
-
-        except Exception as e:
-            latency = time.time() - start_time
-
-            log_chat_request(
-                request_id=request_id,
-                ip=client_ip,
-                endpoint=self.path,
-                model="unknown",
-                prompt="",
-                response_text=str(e),
-                status="error",
-                latency=latency
+            log_event(
+                ctx,
+                200,
+                "Chat request successful",
+                prompt=prompt,
+                response_text=response_text
             )
 
-            self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("X-Request-ID", request_id)
-            self.end_headers()
+            self.send_json(200, {
+                "response": response_text
+            }, request_id)
 
-            response = {
-                "error": "Internal server error",
-                "request_id": request_id
-            }
+        except Exception as error:
+            log_event(
+                ctx,
+                500,
+                "Internal server error",
+                error=error
+            )
 
-            self.wfile.write(json.dumps(response).encode("utf-8"))
+            self.send_json(500, {
+                "error": "Internal server error"
+            }, request_id)
 
 
-def run():
-    server = HTTPServer(("localhost", 8000), Handler)
-    print("Server running on http://localhost:8000")
+# =========================
+# Run Server
+# =========================
+
+def run_server():
+    print("RUNNING FILE:", os.path.abspath(__file__))
+
+    server = HTTPServer((HOST, PORT), ChatHandler)
+
+    print(f"SentinelLLM backend running at http://{HOST}:{PORT}")
+
     server.serve_forever()
 
 
 if __name__ == "__main__":
-    run()
+    run_server()
