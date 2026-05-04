@@ -1,0 +1,16 @@
+NMAP CHEATSHEET
+
+Basic scan:
+nmap 192.168.1.1
+
+Subnet scan:
+nmap 192.168.1.0/24
+
+Service detection:
+nmap -sV target
+
+OS detection:
+nmap -O target
+
+Aggressive:
+nmap -A target
