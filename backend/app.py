@@ -1,8 +1,19 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+API_KEY = os.getenv("SENTINEL_API_KEY")
+
+if not API_KEY:
+    raise ValueError("Missing SENTINEL_API_KEY in .env file")
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from collections import defaultdict
 import json
 import os
 import time
 import logging
+import uuid
 from datetime import datetime
 
 # =========================
@@ -23,8 +34,34 @@ if not request_logger.handlers:
     request_logger.addHandler(file_handler)
 
 
-def log_chat_request(ip, endpoint, model, prompt, response_text, status, latency):
+# =========================
+# Rate Limiting Setup
+# =========================
+
+RATE_LIMIT = 10
+RATE_WINDOW = 60  # seconds
+
+ip_request_times = defaultdict(list)
+
+
+def is_rate_limited(ip):
+    now = time.time()
+
+    ip_request_times[ip] = [
+        t for t in ip_request_times[ip]
+        if now - t < RATE_WINDOW
+    ]
+
+    if len(ip_request_times[ip]) >= RATE_LIMIT:
+        return True
+
+    ip_request_times[ip].append(now)
+    return False
+
+
+def log_chat_request(request_id, ip, endpoint, model, prompt, response_text, status, latency):
     log_entry = {
+        "request_id": request_id,
         "timestamp": datetime.now().isoformat(),
         "ip": ip,
         "endpoint": endpoint,
@@ -37,11 +74,52 @@ def log_chat_request(ip, endpoint, model, prompt, response_text, status, latency
 
     request_logger.info(json.dumps(log_entry))
 
+def is_authorized(headers):
+    provided_key = headers.get("X-API-Key")
+    return provided_key == API_KEY
 
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        if not is_authorized(self.headers):
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "error": "Unauthorized"
+            }).encode("utf-8"))
+            return
         start_time = time.time()
+        request_id = str(uuid.uuid4())
         client_ip = self.client_address[0]
+
+        if is_rate_limited(client_ip):
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("X-Request-ID", request_id)
+            self.end_headers()
+
+            response = {
+                "error": "Rate limit exceeded",
+                "message": "Too many requests. Please wait and try again.",
+                "request_id": request_id
+            }
+
+            self.wfile.write(json.dumps(response).encode("utf-8"))
+
+            latency = time.time() - start_time
+
+            log_chat_request(
+                request_id=request_id,
+                ip=client_ip,
+                endpoint=self.path,
+                model="unknown",
+                prompt="",
+                response_text="Rate limit exceeded",
+                status="rate_limited",
+                latency=latency
+            )
+
+            return
 
         try:
             if self.path == "/chat":
@@ -54,19 +132,22 @@ class Handler(BaseHTTPRequestHandler):
                 model = "local-echo-model"
 
                 response = {
-                    "reply": f"Echo: {user_input}"
+                    "reply": f"Echo: {user_input}",
+                    "request_id": request_id
                 }
 
                 response_text = response["reply"]
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("X-Request-ID", request_id)
                 self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.wfile.write(json.dumps(response).encode("utf-8"))
 
                 latency = time.time() - start_time
 
                 log_chat_request(
+                    request_id=request_id,
                     ip=client_ip,
                     endpoint="/chat",
                     model=model,
@@ -76,10 +157,24 @@ class Handler(BaseHTTPRequestHandler):
                     latency=latency
                 )
 
+            else:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("X-Request-ID", request_id)
+                self.end_headers()
+
+                response = {
+                    "error": "Not found",
+                    "request_id": request_id
+                }
+
+                self.wfile.write(json.dumps(response).encode("utf-8"))
+
         except Exception as e:
             latency = time.time() - start_time
 
             log_chat_request(
+                request_id=request_id,
                 ip=client_ip,
                 endpoint=self.path,
                 model="unknown",
@@ -90,7 +185,16 @@ class Handler(BaseHTTPRequestHandler):
             )
 
             self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("X-Request-ID", request_id)
             self.end_headers()
+
+            response = {
+                "error": "Internal server error",
+                "request_id": request_id
+            }
+
+            self.wfile.write(json.dumps(response).encode("utf-8"))
 
 
 def run():
