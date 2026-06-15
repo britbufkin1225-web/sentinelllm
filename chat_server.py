@@ -44,6 +44,10 @@ if not request_logger.handlers:
 rate_limit_store = {}
 cheatsheet_cache = {}
 
+SERVER_START_TIME = time.time()
+metrics = {
+    "total_requests": 0
+}
 
 # =========================
 # Helpers
@@ -52,6 +56,17 @@ cheatsheet_cache = {}
 def now_iso():
     return datetime.now().isoformat()
 
+def get_metrics():
+    uptime_seconds = round(time.time() - SERVER_START_TIME, 2)
+
+    return {
+        "service": "SentinelLLM Backend",
+        "uptime_seconds": uptime_seconds,
+        "total_requests": metrics["total_requests"],
+        "cache": {
+            "entries": len(cheatsheet_cache)
+        }
+    }
 
 def log_event(ctx, status, message, model=None, prompt=None, response_text=None, error=None):
     log_entry = {
@@ -256,6 +271,7 @@ class ChatHandler(BaseHTTPRequestHandler):
         ip = self.client_address[0]
 
         ctx = RequestContext(request_id, ip, endpoint, "GET")
+        metrics["total_requests"] += 1
 
         if endpoint == "/health":
             log_event(ctx, 200, "Health check")
@@ -264,6 +280,33 @@ class ChatHandler(BaseHTTPRequestHandler):
                "status": "ok",
                "service": "SentinelLLM backend"
             }, request_id)
+            return
+
+        if endpoint == "/status":
+            log_event(ctx, 200, "Status check")
+
+            self.send_json(200, {
+                "service": "SentinelLLM Backend",
+                "status": "running",
+                "version": "0.1.0",
+                "features": {
+                    "health_check": True,
+                    "cheatsheet_lookup": True,
+                    "cheatsheet_search": True,
+                    "cheatsheet_autocomplete": True,
+                    "request_logging": True,
+                    "request_ids": True,
+                    "rate_limiting": True,
+                    "api_key_auth": True,
+                    "cache_enabled": True
+                }
+            }, request_id)
+            return
+
+        if endpoint == "/metrics":
+            log_event(ctx, 200, "Metrics check")
+
+            self.send_json(200, get_metrics(), request_id)
             return
 
         if endpoint == "/cheatsheet":
@@ -330,6 +373,7 @@ class ChatHandler(BaseHTTPRequestHandler):
         ip = self.client_address[0]
 
         ctx = RequestContext(request_id, ip, endpoint, "POST")
+        metrics["total_requests"] += 1
 
         try:
             if endpoint != "/chat":
