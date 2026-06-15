@@ -326,6 +326,7 @@ class ChatHandler(BaseHTTPRequestHandler):
             "/api/v1/system",
             "/api/v1/logs",
             "/api/v1/logs/recent",
+            "/api/v1/logs/summary",
             "/api/v1/events",
             "/api/v1/events/summary",
             "/api/v1/devices",
@@ -437,6 +438,62 @@ class ChatHandler(BaseHTTPRequestHandler):
                     "logs": recent_logs,
                     "count": len(recent_logs),
                     "limit": limit
+                }),
+                request_id
+            )
+            return
+        
+        if endpoint == "/api/v1/logs/summary":
+            logs = read_request_logs()
+
+            status_counts = {}
+            method_counts = {}
+            endpoint_counts = {}
+            error_count = 0
+            latest_request_timestamp = None
+
+            for entry in logs:
+                status = entry.get("status", entry.get("status_code", "unknown"))
+                status_key = str(status)
+
+                method = entry.get("method") or "UNKNOWN"
+                logged_endpoint = entry.get("endpoint") or "unknown"
+                timestamp = entry.get("timestamp")
+
+                status_counts[status_key] = status_counts.get(status_key, 0) + 1
+                method_counts[method] = method_counts.get(method, 0) + 1
+                endpoint_counts[logged_endpoint] = endpoint_counts.get(logged_endpoint, 0) + 1
+
+                try:
+                    if int(status) >= 400:
+                        error_count += 1
+                except (TypeError, ValueError):
+                    pass
+
+                if timestamp:
+                    latest_request_timestamp = timestamp
+
+            top_endpoints = [
+                {"endpoint": endpoint_name, "count": count}
+                for endpoint_name, count in sorted(
+                    endpoint_counts.items(),
+                    key=lambda item: item[1],
+                    reverse=True
+                )[:10]
+            ]
+
+            log_event(ctx, 200, "Logs summary endpoint served")
+
+            self.send_json(
+                200,
+                build_success_response({
+                    "total_requests": len(logs),
+                    "status_counts": status_counts,
+                    "method_counts": method_counts,
+                    "endpoint_counts": endpoint_counts,
+                    "top_endpoints": top_endpoints,
+                    "error_count": error_count,
+                    "latest_request_timestamp": latest_request_timestamp,
                 }),
                 request_id
             )
