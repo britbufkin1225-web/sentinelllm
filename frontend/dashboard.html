@@ -9,10 +9,13 @@
 <body>
     <main class="shell">
         <header class="hero">
-            <div>
-                <p class="eyebrow">SentinelLLM / Operations</p>
-                <h1>Backend dashboard</h1>
-                <p class="subtitle">Live service health, request metrics, and recent activity.</p>
+            <div class="hero-copy">
+                <div class="brand-line">
+                    <span class="brand-mark">S</span>
+                    <p class="eyebrow">Security observability console</p>
+                </div>
+                <h1>SentinelLLM Dashboard</h1>
+                <p class="subtitle">Live backend status, metrics, and request logs</p>
             </div>
             <div class="connection" id="connectionState">
                 <span class="status-dot"></span>
@@ -25,31 +28,43 @@
             <input id="apiKey" type="password" autocomplete="off"
                    placeholder="Enter X-API-Key">
             <button id="refreshButton" type="button">Refresh dashboard</button>
-            <span class="key-note" id="keyNote">Stored only in this browser.</span>
+            <span class="key-note" id="keyNote">Saved locally in this browser.</span>
         </section>
 
         <div class="notice hidden" id="errorMessage" role="alert"></div>
 
         <section class="metric-grid" aria-label="Service overview">
             <article class="metric-card">
-                <span class="metric-label">Backend health</span>
-                <strong id="healthValue">Unknown</strong>
-                <small id="healthDetail">No data loaded</small>
+                <div class="metric-card-heading">
+                    <span class="metric-label">Backend health</span>
+                    <span class="metric-icon health-icon" aria-hidden="true"></span>
+                </div>
+                <strong id="healthValue">Not checked</strong>
+                <small id="healthDetail">Awaiting health response</small>
             </article>
             <article class="metric-card">
-                <span class="metric-label">Total requests</span>
-                <strong id="requestTotal">--</strong>
-                <small>Recorded in request logs</small>
+                <div class="metric-card-heading">
+                    <span class="metric-label">Total requests</span>
+                    <span class="metric-icon request-icon" aria-hidden="true"></span>
+                </div>
+                <strong id="requestTotal">0</strong>
+                <small>Recorded request log entries</small>
             </article>
             <article class="metric-card">
-                <span class="metric-label">Uptime</span>
-                <strong id="uptimeValue">--</strong>
+                <div class="metric-card-heading">
+                    <span class="metric-label">Process uptime</span>
+                    <span class="metric-icon uptime-icon" aria-hidden="true"></span>
+                </div>
+                <strong id="uptimeValue">00:00:00</strong>
                 <small>Current backend process</small>
             </article>
             <article class="metric-card">
-                <span class="metric-label">Cache entries</span>
-                <strong id="cacheValue">--</strong>
-                <small id="cacheDetail">Cheatsheet cache</small>
+                <div class="metric-card-heading">
+                    <span class="metric-label">Cache entries</span>
+                    <span class="metric-icon cache-icon" aria-hidden="true"></span>
+                </div>
+                <strong id="cacheValue">0</strong>
+                <small id="cacheDetail">Cache statistics unavailable</small>
             </article>
         </section>
 
@@ -60,6 +75,7 @@
                         <p class="eyebrow">Response profile</p>
                         <h2>Status codes</h2>
                     </div>
+                    <span>Logged responses</span>
                 </div>
                 <div class="count-list" id="statusCounts">
                     <p class="empty-state">No metrics loaded.</p>
@@ -72,6 +88,7 @@
                         <p class="eyebrow">Traffic profile</p>
                         <h2>HTTP methods</h2>
                     </div>
+                    <span>Request distribution</span>
                 </div>
                 <div class="count-list" id="methodCounts">
                     <p class="empty-state">No metrics loaded.</p>
@@ -85,7 +102,7 @@
                     <p class="eyebrow">Request activity</p>
                     <h2>Recent logs</h2>
                 </div>
-                <span id="logCount">0 entries</span>
+                <span class="table-summary" id="logCount">0 entries</span>
             </div>
             <div class="table-wrap">
                 <table>
@@ -101,7 +118,7 @@
                     </thead>
                     <tbody id="logRows">
                         <tr>
-                            <td colspan="6" class="empty-state">No logs loaded.</td>
+                            <td colspan="6" class="empty-state">Enter an API key to load recent requests.</td>
                         </tr>
                     </tbody>
                 </table>

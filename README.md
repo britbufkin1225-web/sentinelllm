@@ -20,6 +20,7 @@ The project is designed as a lightweight portfolio backend that demonstrates pra
 * Cheatsheet autocomplete
 * In-memory response caching
 * Basic metrics endpoint
+* Live browser dashboard for health, metrics, and request logs
 * CORS support
 * Structured error handling for common request failures
 
@@ -39,9 +40,23 @@ The project is designed as a lightweight portfolio backend that demonstrates pra
 * Unit tests
 * Docker support
 * FastAPI migration
-* Admin dashboard
 * Cybersecurity threat-intel endpoints
-* Frontend demo dashboard
 * API documentation
 * Security documentation
 * Portfolio screenshots and demo GIF
+
+## Dashboard Preview
+
+![SentinelLLM Dashboard](docs/screenshots/dashboard.png)
+
+To create or refresh the dashboard screenshot:
+
+1. Run the backend from the repository root:
+
+   ```powershell
+   python app.py
+   ```
+
+2. Open `http://localhost:8000/dashboard` in a browser.
+3. Enter a valid API key and refresh the dashboard.
+4. Take a screenshot and save it as `docs/screenshots/dashboard.png`.

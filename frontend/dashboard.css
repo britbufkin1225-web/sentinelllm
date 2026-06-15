@@ -4,7 +4,9 @@
     --panel: #101722;
     --panel-strong: #151f2d;
     --border: #263448;
+    --border-soft: rgba(61, 80, 105, 0.55);
     --text: #e7edf7;
+    --text-strong: #f7f9fc;
     --muted: #8ea0b8;
     --accent: #48d7a1;
     --accent-soft: rgba(72, 215, 161, 0.12);
@@ -23,8 +25,11 @@ body {
     margin: 0;
     color: var(--text);
     background:
-        radial-gradient(circle at top right, rgba(33, 89, 112, 0.2), transparent 35%),
-        linear-gradient(180deg, #09101a 0%, var(--bg) 55%);
+        linear-gradient(rgba(20, 30, 44, 0.18) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 30, 44, 0.18) 1px, transparent 1px),
+        radial-gradient(circle at 80% 0%, rgba(29, 104, 105, 0.18), transparent 34%),
+        linear-gradient(180deg, #0a111c 0%, var(--bg) 58%);
+    background-size: 44px 44px, 44px 44px, auto, auto;
 }
 
 button,
@@ -33,9 +38,9 @@ input {
 }
 
 .shell {
-    width: min(1180px, calc(100% - 32px));
+    width: min(1240px, calc(100% - 40px));
     margin: 0 auto;
-    padding: 48px 0 64px;
+    padding: 40px 0 56px;
 }
 
 .hero,
@@ -48,7 +53,33 @@ input {
 }
 
 .hero {
-    margin-bottom: 28px;
+    min-height: 110px;
+    margin-bottom: 24px;
+}
+
+.hero-copy {
+    max-width: 760px;
+}
+
+.brand-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.brand-mark {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    color: #06140f;
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 900;
+    border-radius: 7px;
+    background: var(--accent);
+    box-shadow: 0 0 28px rgba(72, 215, 161, 0.18);
 }
 
 h1,
@@ -58,9 +89,11 @@ p {
 }
 
 h1 {
-    margin-bottom: 8px;
-    font-size: clamp(2rem, 5vw, 3.4rem);
-    letter-spacing: -0.04em;
+    margin-bottom: 10px;
+    color: var(--text-strong);
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    line-height: 1;
+    letter-spacing: -0.045em;
 }
 
 h2 {
@@ -69,12 +102,22 @@ h2 {
 }
 
 .eyebrow {
-    margin-bottom: 8px;
+    margin-bottom: 7px;
     color: var(--accent);
     font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
     font-size: 0.75rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
+}
+
+.brand-line .eyebrow {
+    margin-bottom: 0;
+}
+
+.subtitle {
+    margin-bottom: 0;
+    font-size: 1.05rem;
+    line-height: 1.6;
 }
 
 .subtitle,
@@ -90,11 +133,12 @@ h2 {
     align-items: center;
     gap: 9px;
     min-width: max-content;
-    padding: 10px 14px;
+    padding: 11px 15px;
     color: var(--muted);
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(16, 23, 34, 0.75);
+    background: rgba(10, 16, 25, 0.78);
+    backdrop-filter: blur(12px);
 }
 
 .status-dot {
@@ -116,11 +160,13 @@ h2 {
 
 .controls {
     justify-content: flex-start;
-    padding: 16px;
-    margin-bottom: 18px;
+    padding: 15px 16px;
+    margin-bottom: 20px;
     border: 1px solid var(--border);
     border-radius: 14px;
-    background: rgba(16, 23, 34, 0.85);
+    background: rgba(16, 23, 34, 0.82);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(12px);
 }
 
 .controls label {
@@ -129,7 +175,7 @@ h2 {
 
 .controls input {
     width: min(360px, 100%);
-    padding: 11px 12px;
+    padding: 12px 13px;
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -143,17 +189,20 @@ h2 {
 }
 
 button {
-    padding: 11px 16px;
+    padding: 12px 17px;
     color: #04120d;
     font-weight: 800;
     border: 0;
     border-radius: 8px;
     cursor: pointer;
     background: var(--accent);
+    box-shadow: 0 8px 24px rgba(72, 215, 161, 0.14);
+    transition: filter 150ms ease, transform 150ms ease;
 }
 
 button:hover {
     filter: brightness(1.08);
+    transform: translateY(-1px);
 }
 
 button:disabled {
@@ -182,7 +231,7 @@ button:disabled {
 
 .metric-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-bottom: 16px;
+    margin-bottom: 18px;
 }
 
 .split-grid {
@@ -193,19 +242,39 @@ button:disabled {
 .metric-card,
 .panel {
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     background: linear-gradient(145deg, rgba(21, 31, 45, 0.96), rgba(13, 20, 30, 0.96));
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
 }
 
 .metric-card {
-    min-height: 150px;
-    padding: 20px;
+    position: relative;
+    min-height: 158px;
+    padding: 21px;
+    overflow: hidden;
+}
+
+.metric-card::after {
+    position: absolute;
+    right: -36px;
+    bottom: -56px;
+    width: 130px;
+    height: 130px;
+    border: 1px solid rgba(72, 215, 161, 0.08);
+    border-radius: 50%;
+    content: "";
+}
+
+.metric-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .metric-label {
     display: block;
-    margin-bottom: 18px;
+    margin-bottom: 0;
     color: var(--muted);
     font-size: 0.8rem;
     font-weight: 700;
@@ -213,15 +282,53 @@ button:disabled {
     text-transform: uppercase;
 }
 
+.metric-icon {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(72, 215, 161, 0.22);
+    border-radius: 9px;
+    background: var(--accent-soft);
+}
+
+.metric-icon::before {
+    position: absolute;
+    inset: 9px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    content: "";
+}
+
+.request-icon::before {
+    inset: 7px 9px;
+    border-radius: 3px;
+}
+
+.uptime-icon::before {
+    inset: 7px;
+    border-width: 1px;
+}
+
+.cache-icon::before {
+    inset: 8px 6px;
+    border-radius: 50%;
+}
+
 .metric-card strong {
     display: block;
-    margin-bottom: 7px;
+    min-width: 0;
+    margin: 23px 0 8px;
+    overflow: hidden;
+    color: var(--text-strong);
     font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-    font-size: 1.75rem;
+    font-size: clamp(1.45rem, 2.5vw, 1.85rem);
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .panel {
-    padding: 20px;
+    padding: 22px;
 }
 
 .panel-heading {
@@ -229,8 +336,8 @@ button:disabled {
 }
 
 .count-list {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
 }
 
@@ -239,11 +346,10 @@ button:disabled {
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    min-width: 128px;
     padding: 12px 14px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: #0b111a;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(9, 15, 23, 0.95), rgba(13, 20, 30, 0.95));
 }
 
 .count-chip span:first-child {
@@ -253,10 +359,27 @@ button:disabled {
 
 .count-chip strong {
     color: var(--accent);
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 1.05rem;
+}
+
+.count-chip.status-success {
+    border-color: rgba(72, 215, 161, 0.3);
+}
+
+.count-chip.status-warning {
+    border-color: rgba(243, 201, 105, 0.3);
+}
+
+.count-chip.status-error {
+    border-color: rgba(255, 107, 122, 0.3);
 }
 
 .table-wrap {
     overflow-x: auto;
+    border: 1px solid var(--border-soft);
+    border-radius: 11px;
+    background: rgba(7, 12, 19, 0.62);
 }
 
 table {
@@ -267,7 +390,7 @@ table {
 
 th,
 td {
-    padding: 12px 10px;
+    padding: 13px 14px;
     text-align: left;
     border-bottom: 1px solid var(--border);
 }
@@ -277,10 +400,31 @@ th {
     font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    background: rgba(14, 22, 33, 0.92);
 }
 
 td {
     font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    vertical-align: middle;
+}
+
+tbody tr {
+    transition: background 140ms ease;
+}
+
+tbody tr:hover {
+    background: rgba(72, 215, 161, 0.035);
+}
+
+tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.table-summary {
+    padding: 6px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(8, 13, 20, 0.72);
 }
 
 .status-badge {
@@ -316,6 +460,10 @@ td {
     .controls input {
         width: 100%;
     }
+
+    .key-note {
+        text-align: center;
+    }
 }
 
 @media (max-width: 600px) {
@@ -327,6 +475,10 @@ td {
     .hero {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .connection {
+        align-self: flex-start;
     }
 
     .metric-grid,

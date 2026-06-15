@@ -1,4 +1,5 @@
 const STORAGE_KEY = "sentinelllm.apiKey";
+const MAX_VISIBLE_LOGS = 10;
 
 const elements = {
     apiKey: document.querySelector("#apiKey"),
@@ -21,6 +22,10 @@ const elements = {
 function setLoading(isLoading) {
     elements.refreshButton.disabled = isLoading;
     elements.refreshButton.textContent = isLoading ? "Loading..." : "Refresh dashboard";
+
+    if (isLoading) {
+        elements.logCount.textContent = "Loading...";
+    }
 }
 
 function setConnection(state, message) {
@@ -86,11 +91,20 @@ function renderCounts(container, counts) {
         const chip = document.createElement("div");
         chip.className = "count-chip";
 
+        const numericLabel = Number(label);
+        if (Number.isFinite(numericLabel) && numericLabel >= 500) {
+            chip.classList.add("status-error");
+        } else if (Number.isFinite(numericLabel) && numericLabel >= 400) {
+            chip.classList.add("status-warning");
+        } else if (Number.isFinite(numericLabel) && numericLabel >= 200) {
+            chip.classList.add("status-success");
+        }
+
         const name = document.createElement("span");
         name.textContent = label;
 
         const value = document.createElement("strong");
-        value.textContent = count.toLocaleString();
+        value.textContent = Number(count || 0).toLocaleString();
 
         chip.append(name, value);
         container.append(chip);
@@ -121,10 +135,13 @@ function statusClass(status) {
 }
 
 function renderLogs(logs) {
+    const visibleLogs = logs.slice(-MAX_VISIBLE_LOGS).reverse();
     elements.logRows.replaceChildren();
-    elements.logCount.textContent = `${logs.length} ${logs.length === 1 ? "entry" : "entries"}`;
+    elements.logCount.textContent = logs.length > MAX_VISIBLE_LOGS
+        ? `${MAX_VISIBLE_LOGS} of ${logs.length} entries`
+        : `${logs.length} ${logs.length === 1 ? "entry" : "entries"}`;
 
-    if (!logs.length) {
+    if (!visibleLogs.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 6;
@@ -135,7 +152,7 @@ function renderLogs(logs) {
         return;
     }
 
-    for (const log of [...logs].reverse()) {
+    for (const log of visibleLogs) {
         const row = document.createElement("tr");
         const values = [
             formatTimestamp(log.timestamp),
@@ -172,16 +189,24 @@ function renderLogs(logs) {
 }
 
 function renderHealth(health) {
-    elements.healthValue.textContent = health.status === "ok" ? "Operational" : health.status;
-    elements.healthDetail.textContent = health.service || "SentinelLLM backend";
+    const status = typeof health?.status === "string" ? health.status : "unknown";
+    elements.healthValue.textContent = status === "ok" ? "Operational" : status;
+    elements.healthDetail.textContent = health?.service || "SentinelLLM backend";
 }
 
 function renderMetrics(metrics) {
-    const requests = metrics.requests || {};
+    const requests = metrics?.requests || {};
+    const cacheItems = Number(metrics?.cache?.items);
+    const cacheTtl = Number(metrics?.cache?.ttl_seconds);
+
     elements.requestTotal.textContent = Number(requests.total_requests || 0).toLocaleString();
-    elements.uptimeValue.textContent = formatUptime(metrics.uptime_seconds);
-    elements.cacheValue.textContent = Number(metrics.cache?.items || 0).toLocaleString();
-    elements.cacheDetail.textContent = `TTL ${metrics.cache?.ttl_seconds || 0}s`;
+    elements.uptimeValue.textContent = formatUptime(Number(metrics?.uptime_seconds));
+    elements.cacheValue.textContent = Number.isFinite(cacheItems)
+        ? cacheItems.toLocaleString()
+        : "0";
+    elements.cacheDetail.textContent = Number.isFinite(cacheTtl)
+        ? `Cache TTL ${cacheTtl}s`
+        : "Cache statistics unavailable";
     renderCounts(elements.statusCounts, requests.status_counts);
     renderCounts(elements.methodCounts, requests.method_counts);
 }
@@ -191,8 +216,8 @@ async function refreshDashboard() {
 
     localStorage.setItem(STORAGE_KEY, apiKey);
     elements.keyNote.textContent = apiKey
-        ? "API key saved in localStorage."
-        : "Enter an API key to load protected metrics and logs.";
+        ? "API key saved locally."
+        : "Enter an API key to load protected data.";
 
     clearError();
     setLoading(true);
@@ -203,7 +228,7 @@ async function refreshDashboard() {
         renderHealth(health);
 
         if (!apiKey) {
-            throw new Error("API key is required for metrics and recent logs.");
+            throw new Error("Enter an API key to load metrics and recent request logs.");
         }
 
         const [metrics, recentLogs] = await Promise.all([
