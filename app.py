@@ -41,6 +41,7 @@ API_KEY = os.getenv("SENTINEL_API_KEY", "dev-key-change-me")
 
 CHEATSHEET_DIR = "cheatsheets"
 CACHE_TTL_SECONDS = 300
+FRONTEND_DIR = "frontend"
 
 
 # =========================
@@ -282,6 +283,24 @@ def read_request_logs():
     return logs
 
 
+def summarize_request_logs(logs):
+    status_counts = {}
+    method_counts = {}
+
+    for entry in logs:
+        status = str(entry.get("status", entry.get("status_code", "unknown")))
+        method = entry.get("method") or "UNKNOWN"
+
+        status_counts[status] = status_counts.get(status, 0) + 1
+        method_counts[method] = method_counts.get(method, 0) + 1
+
+    return {
+        "total_requests": len(logs),
+        "status_counts": status_counts,
+        "method_counts": method_counts
+    }
+
+
 # =========================
 # Request Handler
 # =========================
@@ -308,6 +327,23 @@ class ChatHandler(BaseHTTPRequestHandler):
         response_body = json.dumps(data).encode("utf-8")
         self.wfile.write(response_body)
 
+    def send_static_file(self, filename, content_type):
+        filepath = os.path.join(FRONTEND_DIR, filename)
+
+        try:
+            with open(filepath, "rb") as file:
+                content = file.read()
+        except OSError:
+            self.send_error(404, "Dashboard asset not found")
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_OPTIONS(self):
         request_id = str(uuid.uuid4())
         self.set_headers(200, request_id)
@@ -321,6 +357,17 @@ class ChatHandler(BaseHTTPRequestHandler):
         ip = self.client_address[0]
 
         ctx = RequestContext(request_id, ip, endpoint, "GET")
+
+        dashboard_routes = {
+            "/dashboard": ("dashboard.html", "text/html; charset=utf-8"),
+            "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
+            "/dashboard.js": ("dashboard.js", "application/javascript; charset=utf-8"),
+        }
+
+        if endpoint in dashboard_routes:
+            filename, content_type = dashboard_routes[endpoint]
+            self.send_static_file(filename, content_type)
+            return
 
         protected_get_routes = {
             "/api/v1/system",
@@ -557,6 +604,8 @@ class ChatHandler(BaseHTTPRequestHandler):
             return
 
         if endpoint == "/api/v1/metrics":
+            logs = read_request_logs()
+            request_summary = summarize_request_logs(logs)
             log_event(ctx, 200, "Metrics endpoint served")
 
             self.send_json(
@@ -565,6 +614,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                     "service": "SentinelLLM backend",
                     "status": "running",
                     "uptime_seconds": round(time.time() - START_TIME, 2),
+                    "requests": request_summary,
                     "rate_limit": {
                         "window_seconds": RATE_LIMIT_WINDOW_SECONDS,
                         "max_requests": RATE_LIMIT_MAX_REQUESTS

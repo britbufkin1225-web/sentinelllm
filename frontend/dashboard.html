@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SentinelLLM Dashboard</title>
+    <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+    <main class="shell">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">SentinelLLM / Operations</p>
+                <h1>Backend dashboard</h1>
+                <p class="subtitle">Live service health, request metrics, and recent activity.</p>
+            </div>
+            <div class="connection" id="connectionState">
+                <span class="status-dot"></span>
+                <span>Waiting for refresh</span>
+            </div>
+        </header>
+
+        <section class="controls" aria-label="Dashboard controls">
+            <label for="apiKey">API key</label>
+            <input id="apiKey" type="password" autocomplete="off"
+                   placeholder="Enter X-API-Key">
+            <button id="refreshButton" type="button">Refresh dashboard</button>
+            <span class="key-note" id="keyNote">Stored only in this browser.</span>
+        </section>
+
+        <div class="notice hidden" id="errorMessage" role="alert"></div>
+
+        <section class="metric-grid" aria-label="Service overview">
+            <article class="metric-card">
+                <span class="metric-label">Backend health</span>
+                <strong id="healthValue">Unknown</strong>
+                <small id="healthDetail">No data loaded</small>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Total requests</span>
+                <strong id="requestTotal">--</strong>
+                <small>Recorded in request logs</small>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Uptime</span>
+                <strong id="uptimeValue">--</strong>
+                <small>Current backend process</small>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Cache entries</span>
+                <strong id="cacheValue">--</strong>
+                <small id="cacheDetail">Cheatsheet cache</small>
+            </article>
+        </section>
+
+        <section class="split-grid">
+            <article class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">Response profile</p>
+                        <h2>Status codes</h2>
+                    </div>
+                </div>
+                <div class="count-list" id="statusCounts">
+                    <p class="empty-state">No metrics loaded.</p>
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">Traffic profile</p>
+                        <h2>HTTP methods</h2>
+                    </div>
+                </div>
+                <div class="count-list" id="methodCounts">
+                    <p class="empty-state">No metrics loaded.</p>
+                </div>
+            </article>
+        </section>
+
+        <section class="panel log-panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Request activity</p>
+                    <h2>Recent logs</h2>
+                </div>
+                <span id="logCount">0 entries</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Status</th>
+                            <th>Latency</th>
+                            <th>Request ID</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logRows">
+                        <tr>
+                            <td colspan="6" class="empty-state">No logs loaded.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="/dashboard.js"></script>
+</body>
+</html>
